@@ -429,6 +429,33 @@ knitr::include_graphics("bhet-plan.png")
 - Can lead to $\beta^{DD}$ that is a poor summary of group-specific effects if there is heterogeneity.
 ]
 
+---
+## Simulated evidence
+.footnote[See `r Citet(bib, "Baker:2022tv")` for complete description.]
+
+1. 1 treated group at 1 time, constant effect.  
+2. Multiple groups, staggered timing, constant effects.  
+3. Multiple groups, staggered timing, heterogeneous effects.  
+
+.center[
+```{r, echo=F, out.width="80%", cache=TRUE}
+knitr::include_graphics("baker-sim-dgps.png")
+```
+]
+
+---
+## Impact on estimates
+.footnote[See `r Citet(bib, "Baker:2022tv")` for complete description.]
+
+1. No bias.  
+2. Little bias.  
+3. Wrong sign!  
+
+.center[
+```{r, echo=F, out.width="80%", cache=TRUE}
+knitr::include_graphics("baker-sim-results.png")
+```
+]
 
 ---
 ## What are potential solutions?
@@ -445,7 +472,11 @@ knitr::include_graphics("bhet-plan.png")
 ### Cengiz, Dube, Lindner, and Zipperer (2019)
 #### Create state-event-specific panel datasets and calculate event-specific estimates using separate regressions for each state-event.
 
+---
+class: center, middle
 
+# Example 
+# (time permitting)
 
 ---
 
