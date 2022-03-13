@@ -1,9 +1,9 @@
 ---
-title: "TAMANI Project DD"
-subtitle: "Sam Harper" 
-author: "joint with Erin H., Ari, Ilona, Holly"
-institute: "(all errors are mine)"
-date: 2021-11-23
+title: "Estimating BHET Policy Impacts"
+subtitle: "" 
+author: "Sam Harper"
+institute: ""
+date: 2022-03-14
 output:
   xaringan::moon_reader:
     lib_dir: libs
@@ -14,6 +14,11 @@ output:
       highlightLines: true
       countIncrementalSlides: false
       ratio: "16:9"
+header-includes:
+- \usepackage{tikzsymbols}
+- \usetikzlibrary{arrows,shapes,backgrounds}
+- \usetikzlibrary{decorations.pathreplacing,calligraphy}
+- \usepackage{wasysym}
 ---
 ```{r setup, include=FALSE}
 library(here)
@@ -33,6 +38,13 @@ library(lme4)
 library(RStata)
 options("RStata.StataVersion" = 16)
 options("RStata.StataPath"= '/Applications/Stata/StataMP.app/Contents/MacOS/stata-mp')
+library(RefManageR)
+xfun::pkg_load2(c('tikzDevice', 'magick', 'pdftools'))
+source("helper.R")
+BibOptions(check.entries = FALSE, 
+           bib.style = "authoryear", style = "markdown",
+           dashed = TRUE, max.names=1)
+bib <- ReadBib("PPHS617.bib")
 ```
 
 ```{r, include=FALSE}
@@ -50,6 +62,394 @@ pdf2png = function(path) {
 library(xaringanthemer)
 write_xaringan_theme(text_color = "#000000", header_color = "#737373", text_font_size = "24px",  text_font_family = "'Lucida Sans'", header_font_google = google_font("Source Sans Pro"), title_slide_background_color =  "#ffffff", title_slide_text_color = "#000000", link_color = "#0000ee", footnote_font_size = "0.5em")
 ```
+## Thinking about research design
+
+.left-column[
+```{tikz rd, echo=F, out.width="90%", cache=TRUE}
+\begin{tikzpicture}[transform shape]
+\tikzset{> = stealth}
+    \node (z) at (-0.75,-0.75) {$Z$};
+    \node (c) at (0.5, 0) {$C$};
+    \node (t) at (0,-0.75) {$T$};
+    \node (y) at (1,-0.75) {$Y$};
+    \node (u) at (0.5, -1.5) {$U$};
+    \path[->] (t) edge (y);
+    \path[->] (c) edge (t);
+    \path[->] (c) edge (y);
+    \path[->] (u) edge (t);
+    \path[->] (u) edge (y);
+\end{tikzpicture}
+```
+]
+
+.right-column[
+- Goal: estimate treatment [ban] effect $(T)$ on our outcomes $(Y)$.
+
+- Recall the potential outcomes framework. We want to estimate what *would have happened* in ban villages without the ban:
+
+$$E[Y^{1}-Y^{0}]=E[Y^{1}|T=1]-E[Y^{0}|T=0]$$
+
+- Where should we get our counterfactual?
+
+- Ideally randomize $(Z)$, but not feasible.
+- Instead we can control for covariates $(C)$, but still worry about unmeasured confounders $(U)$.
+]
+
+---
+.left-column[
+### T vs. C after ban?
+
+- Could compare "ban" and "no ban" villages after policy.
+
+- Treated and control villages may differ in ways that are hard to measure.
+]
+
+..right-column[
+```{tikz dd1, echo=F, out.width="95%", cache=TRUE}
+\begin{tikzpicture}[scale=2]
+    \draw [<->,thick] (0,3) node (yaxis) [above] {$y$} |- (4,0) node (xaxis) [right] {$time$};
+	\draw[thick, color=black, dashed] (2,0) coordinate (t0_0) -- (2,3) coordinate (t0_1);
+	\coordinate (T) at (4.5,2.1);
+    \fill[red] (T) circle (1pt) node[right, color=black] {Treated};
+	\coordinate (C) at (4.5,1.8);
+    \fill[blue] (C) circle (1pt) node[right, color=black] {Control};
+	
+	\draw[thick, -> ] (2.6,2.9) coordinate (t0_0) node[right] {Intervention} -- (2.1,2.9) coordinate (t0_1);
+
+	\coordinate (o1) at (2.5,1.5);
+	\fill[blue] (o1) circle (1.5pt);
+	\coordinate (o2) at (2.5,2);
+	\fill[red] (o2) circle (1.5pt);
+	\fill[blue] (o1) circle (1.5pt) node[right=0.2cm, align=left] {Potential confounding \\ by group?};
+	
+\end{tikzpicture}
+```
+]
+
+---
+.left-column[
+### Pre-post in treated?
+
+- Could compare "ban" villages before vs. after policy.
+
+- Other factors affecting $(Y)$ can lead to bias.
+]
+
+..right-column[
+```{tikz dd2, echo=F, out.width="95%", cache=TRUE}
+\begin{tikzpicture}[scale=2]
+    
+	% Draw axes
+    \draw [<->,thick] (0,3) node (yaxis) [above] {$y$} |- (4,0) node (xaxis) [right] {$time$};
+	\draw[thick, color=black, dashed] (2,0) coordinate (t0_0) -- (2,3) coordinate (t0_1);
+	
+	% Legend
+	\coordinate (T) at (4.5,2.1);
+    \fill[red] (T) circle (1pt) node[right, color=black] {Treated};
+	\coordinate (C) at (4.5,1.8);
+    \fill[blue] (C) circle (1pt) node[right, color=black] {Control};
+	
+	% Intervention line
+	\draw[thick, -> ] (2.6,2.9) coordinate (t0_0) node[right] {Intervention} -- (2.1,2.9) coordinate (t0_1);
+
+	% Data points
+	\coordinate (o1) at (1.5,1.5);
+	\fill[red] (o1) circle (1.5pt);
+	\coordinate (o2) at (2.5,2);
+	\fill[red] (o2) circle (1.5pt);
+
+	\draw[thick,color=red,-] (o1) -- (o2);
+	\coordinate (c1) at (2.5,1.5);
+	\fill[red] (c1) circle (1.5pt);
+	\draw[thick,color=red,dashed,-] (o1) -- (c1) node[right=0.2cm, align=left] {Potential confounding \\ by time?};
+	
+\end{tikzpicture}
+```
+]
+
+---
+.left-column[
+### Add pretests for both
+
+- Compares pre/post in treated and untreated.
+
+- Captures all time-invariant group diffs.
+
+- Captures all group-invariant time trends.
+]
+
+..right-column[
+```{tikz dd3, echo=F, out.width="95%", cache=TRUE}
+\begin{tikzpicture}[scale=2]
+    
+	% Draw axes
+    \draw [<->,thick] (0,3) node (yaxis) [above] {$y$} |- (4,0) node (xaxis) [right] {$time$};
+	\draw[thick, color=black, dashed] (2,0) coordinate (t0_0) -- (2,3) coordinate (t0_1);
+	
+	% Legend
+	\coordinate (T) at (4.5,2.1);
+    \fill[red] (T) circle (1pt) node[right, color=black] {Treated};
+	\coordinate (C) at (4.5,1.8);
+    \fill[blue] (C) circle (1pt) node[right, color=black] {Control};
+	
+	% Intervention line
+	\draw[thick, -> ] (2.6,2.9) coordinate (t0_0) node[right] {Intervention} -- (2.1,2.9) coordinate (t0_1);
+
+	% Data points
+	\coordinate (c0) at (1.5,1.5);
+	\fill[blue] (c0) circle (1.5pt);
+	\coordinate (t0) at (1.5,1.7);
+	\fill[red] (t0) circle (1.5pt);
+	\coordinate (c1) at (2.5,1.5);
+	\fill[blue] (c1) circle (1.5pt);
+	\coordinate (t1) at (2.5,2);
+	\fill[red] (t1) circle (1.5pt);
+
+	\draw[thick,color=blue,-] (c0) -- (c1) node[right=0.2cm, align=left] {Control group estimates \\ counterfactual trend};
+	\draw[thick,color=red,-] (t0) -- (t1);
+	
+\end{tikzpicture}
+```
+]
+
+---
+## Difference-in-Differences: Basic Idea
+.left-column[
+```{tikz, echo=F}
+\begin{tikzpicture}[transform shape]
+\tikzset{> = stealth}
+    \node (g) at (1,1) {$Group$};
+    \node (t) at (0,0) {$T$};
+    \node (y) at (2,0) {$Y$};
+    \node (u) at (1, -1) {$Time$};
+    \path[->] (t) edge (y);
+    \path[->] (u) edge (t);
+    \path[->] (u) edge (y);
+    \path[->] (g) edge (t);
+    \path[->] (g) edge (y);
+\end{tikzpicture}
+```
+]
+
+.right-column[
+
+- The average change over time in the control group is
+    subtracted from the change over time in the treated
+    group.
+
+
+- Double differencing removes biases in second period comparisons
+    between the treatment and control group that could result from:
+
+  - Fixed differences between those groups.
+  - Comparisons over time in the treatment group that could be the
+    result of time trends unrelated to the treatment.
+]
+
+---
+### Difference-in-differences: How? The 2x2 case
+
+.left-column[
+- Single treated and control group, two periods
+
+- $\beta_{1}$ = Treated group
+
+- $\beta_{2}$ = Post period  
+
+- $\beta_{3}$ = Product term  
+
+]
+
+.right-column[
+y | group | time | treat? | post? | treatXpost |
+--|--|--|--|--|--|
+$\vdots$  | 1 | 1 | 0 | 0 | 0 | 
+$\vdots$  | 1 | 2 | 0 | .red[1] | 0 | 
+$\vdots$  | 2 | 1 | .blue[1] | 0 | 0 | 
+$\vdots$  | 2 | 2 | .blue[1] | .red[1] | .green[1] | 
+
+
+$$Y = \color{blue}{\beta_{0} + \beta_{1}*treat} + \color{red}{\beta_{2}*post} +   \color{green}{\beta_{3}*treat*post}$$
+]
+
+---
+.left-column[
+### Visual representation
+
+- $\beta_{0}$: control pre
+
+- $\beta_{1}$: group difference pre 
+
+- $\beta_{2}$: pre-post diff in control
+
+- $\beta_{3}$: DD estimate
+
+]
+
+.right-column[
+$$Y=\beta_{0}+\beta_{1}Treat+\beta_{2}Post+\beta_{3}Treat*Post+\varepsilon_{t}$$
+```{r, echo=F, out.width="90%", cache=TRUE}
+knitr::include_graphics("bhet-dd-viz.png")
+```
+]
+
+---
+## Key Assumption: Parallel Trends
+.footnote[Note: Impossible to verify. See recent work by `r Citet(bib, "Rambachan:2019wf")` and `r Citet(bib, "Roth:2020uk")` for ways to investigate.]
+
+.left-column[
+```{r, echo=F}
+knitr::include_graphics("gertler1.png")
+```
+]
+
+.right-column[
+-   Basic DD controls for any time invariant characteristics of both
+    treated and control groups.
+
+-   Does not control for any **time-varying** characteristics.
+
+-   If another policy/intervention occurs in the treated (or control)
+    group at the same time as the intervention, we cannot cleanly
+    identify the effect of the program.
+
+-   DD main assumption: in the absence of the intervention treated and
+    control groups would have displayed similar **trends**.
+    
+- This is called the *parallel trends* assumption.
+]
+
+---
+## Reformulation of the model using 'fixed effects'
+.left-column[
+Express our earlier model using 'fixed effects':
+
+- Dummy for Group
+
+- Dummy for Time
+
+- *Time-varying* policy indicator
+]
+
+.right-column[
+
+$$Y = \color{blue}{\beta_{0} + \beta_{1}*Group2} + \color{red}{\beta_{2}*Time2} +   \color{green}{\beta_{3}*policy}$$
+
+y | group | time | treat? | post? | treatXpost | Group 2 | Time 2 | policy
+--|--|--|--|--|--|
+$\vdots$  | 1 | 1 | 0 | 0 | 0 | 0 | 0 | 0
+$\vdots$  | 1 | 2 | 0 | 1 | 0 | 0 | .red[1] | 0
+$\vdots$  | 2 | 1 | 1 | 0 | 0 | .blue[1] | 0 | 0 
+$\vdots$  | 2 | 2 | 1 | 1 | 1 | .blue[1] | .red[1] | .green[1]
+
+- $\color{green}{\beta_{3}}$ still estimates the 'difference-in-differences' parameter.
+]
+
+---
+.pull-left[
+## What about multiple treated groups?
+- Easy to rewrite our earlier model for multiple groups **treated at the same time.**
+
+- 3 units and 3 time periods.
+- Groups 1 and 3 implement policy at .green[T2].
+
+- .blue[g2] and .blue[g3] are dummies for groups 2&3
+- .red[t2] and .red[t3] are dummies for times 2&3.
+
+- .green[policy] is a time-varying dummy when policy is in place.
+]
+
+.pull-right[
+y | group | time | policy | g2 | g3 | t2 | t3 
+--|--|--|--|--|--|
+$\vdots$  | 1 | 1 | 0 | 0 | 0 | 0 | 0 
+$\vdots$  | 1 | 2 | .green[1] | 0 | 0 | .red[1] | 0 
+$\vdots$  | 1 | 3 | .green[1] | 0 | 0 | 0 | .red[1] 
+$\vdots$  | 2 | 1 | 0 | .blue[1] | 0 | 0 | 0
+$\vdots$  | 2 | 2 | 0 | .blue[1] | 0 | .red[1] | 0 
+$\vdots$  | 2 | 3 | 0 | .blue[1] | 0 | 0 | .red[1] 
+$\vdots$  | 3 | 1 | 0 | 0 | .blue[1] | 0 | 0 
+$\vdots$  | 3 | 2 | .green[1] | 0 | .blue[1] | .red[1] | 0 
+$\vdots$  | 3 | 3 | .green[1] | 0 | .blue[1] | 0 | .red[1] 
+]
+
+---
+### Basic setup for DD with variable timing ("two way fixed effects")
+.right-column[
+More generally, you could write the basic equation with multiple group $(\gamma_{g})$ and time $(\tau_{t})$ fixed effects as:
+    
+$$Y_{gt}=\gamma_{g} + \tau_{t} + \color{red}{\delta^{DD}} p_{gt}+\varepsilon_{st}$$
+where 
+- $y_{gt}$ is the outcome for unit $i$ at time $t$.
+- $\gamma_{g}$ are group-specific fixed effects.
+- $\tau_{t}$ are fixed effects for each time period.
+- $p_{gt}$ is a time-varying treatment indicator.
+- $\color{red}{\delta^{DD}}$ is the difference-in-differences estimate.
+]
+
+---
+### Our plan
+```{r, echo=F, out.width="90%", cache=TRUE}
+knitr::include_graphics("bhet-plan.png")
+```
+
+---
+# Key points from Goodman-Bacon (2019)
+.right-column[
+- ### With OLS, DD with treatment timing is a variance-weighted average of many 2x2 ATTs.
+- ### Weights are a function of both group sizes *and* variances.
+- ### Can lead to $\delta^{DD}$ that is a poor summary of group-specific effects.
+]
+
+---
+.footnote[Graph from https://andrewcbaker.netlify.app/2019/09/25/difference-in-differences-methodology/]
+
+.left-column[
+1. Early-adopters (*k*) vs. never treated (*U*)
+
+2. Later-adopters (*l*) vs. never treated (*U*).
+
+3. Early (*k*) vs. later (*l*) adopters.
+
+4. **Later (l) vs. earlier (k) adopters.**
+]
+.right-column[.center[
+![:scale 90%](baker-f1.png)]]
+
+---
+## What is the problem?
+.right-column[
+
+- Using earlier treated groups as controls only 'works' if the treatment effects are:
+  - Homogeneous across groups at a given time; and
+  - Homogeneous over time (no dynamic effects).
+
+- This adds any changes in treatment effects in the early group, which get .red[subtracted from the DD estimate.]
+
+- Can lead to $\beta^{DD}$ that is a poor summary of group-specific effects if there is heterogeneity.
+]
+
+
+---
+## What are potential solutions?
+.footnote[Many new papers on this. See recent papers by `r Citet(bib, "Callaway:2021vd")`, `r Citet(bib, "Goodman-Bacon:2021va")`, `r Citet(bib, "Cengiz:2019vw")` and `r Citet(bib, "Sun:2021vm")`]
+
+- All basically involve .red[not allowing] early treated groups to serve as controls later.
+
+### Callaway and Sant'Anna (2021)
+#### Use non-parametric group-time ATTs (+ covariates).
+
+### Abraham and Sun (2021)
+#### Use saturated fixed effects to ensure that prior treated units are not used as controls
+
+### Cengiz, Dube, Lindner, and Zipperer (2019)
+#### Create state-event-specific panel datasets and calculate event-specific estimates using separate regressions for each state-event.
+
+
+
+---
+
+
 ## Tabora Maternal Newborn Health Initiative (TAMANI) 
 .center[
 ```{r,  echo=F, out.width = 800}
@@ -111,60 +511,7 @@ knitr::include_graphics("sw-design.png")
 ```
 ]
 
----
-## A note about defining 'treated'
-.pull-left[
-- *Treated* at wave 4 For immediate outcomes (contraceptive prevalence, unmet need for family planning).
 
-- Same woman reports on a child that was born in January 2019 (before the intervention was implemented).
-
-- *Untreated* at wave 4 for for Jan '19 delivery outcomes (skilled birth attendance and respectful care).
-
-- Pregnancy began in the spring of 2018, so pregnancy outcomes (antenatal care visits) are considered “untreated”. 
-]
-
-.pull-right[
-Respondent at wave 4 (January 2021). 
-```{r,  echo=F}
-knitr::include_graphics("treated.png")
-```
-]
-
----
-## Basic setup for DD with variable timing
-.right-column[
-We have different districts that are exposed to our intervention at different times. We often use OLS (or LPM) to fit:
-$$y_{it} = \alpha_{i} + \tau_{t} + \beta^{DD}{D_{it}} + \epsilon_{it}$$
-### where
-- $y_{it}$ is the outcome for unit $i$ at time $t$.
-- $\alpha_{i}$ are unit-specific fixed effects.
-- $\tau_{t}$ are fixed effects for each time period.
-- $D_{it}$ is a time-varying treatment indicator.
-- $\beta^{DD}$ is the difference-in-differences estimate.
-]
-
----
-# Key points from Goodman-Bacon (2019)
-.right-column[
-- ### With OLS, DD with treatment timing is a variance-weighted average of many 2x2 ATTs.
-- ### Weights are a function of both group sizes *and* variances.
-- ### Can lead to $\beta^{DD}$ that is a poor summary of group-specific effects.
-]
-
----
-.footnote[Graph from https://andrewcbaker.netlify.app/2019/09/25/difference-in-differences-methodology/]
-
-.left-column[
-1. Early-adopters (*k*) vs. never treated (*U*)
-
-2. Later-adopters (*l*) vs. never treated (*U*).
-
-3. Early (*k*) vs. later (*l*) adopters.
-
-4. **Later (l) vs. earlier (k) adopters.**
-]
-.right-column[.center[
-![:scale 90%](baker-f1.png)]]
 
 ---
 ## Data structure: Individual-level
@@ -558,21 +905,11 @@ d_agg %>% filter((time ==3 | time == 4) & group >= 4) %>%
 ```
 
 ---
-## Questions / Help
-.right-column[
-### Aggregating
-#### What is the right way to conceptualize aggregating the ATTs?
-
-### Clustering
-#### How to think about the 'right' standard error?
-]
-
----
 ### Dynamic Effects
 .pull-left[
 - Estimates by length of exposure
 
-- Overall summary: $$\overline{ATT} = 0.176 (-0.02, 0.37)$$
+- Overall summary: $$\overline{ATT} = 0.176 \hspace{0.2em} (-0.02, 0.37)$$
 
 ```{r dynamic, message = FALSE, echo=FALSE}
 agg.dn <- aggte(atts_8, type = "dynamic")
@@ -583,7 +920,7 @@ datts %>% select(-type, -term,
   kable_styling(font_size = 16)
 ```
 
-- TWFE estimate was $$\overline{ATT} =0.06 (-0.013, 0.133)$$
+- TWFE estimate was $$\overline{ATT} =0.06 \hspace{0.2em}(-0.013, 0.133)$$
 ]
 
 .pull-right[
@@ -608,7 +945,7 @@ gsatts %>% select(-type, -term,
   kable_styling(font_size = 16)
 ```
 
-- TWFE estimate was $$\overline{ATT} =0.06 (-0.013, 0.133)$$
+- TWFE estimate was $$\overline{ATT} =0.06 \hspace{0.2em}(-0.013, 0.133)$$
 ]
 
 .pull-right[
@@ -622,7 +959,7 @@ ggdid(agg.d)
 .pull-left[
 - ATT in time period t for groups that have participated in the treatment by time period t.
 
-- Overall summary:$$\overline{ATT} = 0.102 (-0.02, 0.22)$$
+- Overall summary:$$\overline{ATT} = 0.102 \hspace{0.2em}(-0.02, 0.22)$$
 
 ```{r calendar, message = FALSE, echo=FALSE}
 agg.c <- aggte(atts_8, type = "calendar")
@@ -633,7 +970,7 @@ catts %>% select(-type, -term,
   kable_styling(font_size = 16)
 ```
 
-- TWFE estimate was $$\overline{ATT} =0.06 (-0.013, 0.133)$$
+- TWFE estimate was $$\overline{ATT} =0.06 \hspace{0.2em} (-0.013, 0.133)$$
 ]
 
 .pull-right[
@@ -643,104 +980,25 @@ ggdid(agg.c)
 ]
 
 ---
-## Options for Standard errors
-.left-column[
-- Asymptotic
-
-- Bootstrap
-
-- Cluster bootstrap
-]
-
+### Summary and Implications
 .right-column[
-### Comment from the Callaway-Sant'Anna paper:
-```{r,  echo=F}
-knitr::include_graphics("cs-quote-clustering.png")
-```
+- BHET has multiple groups and multiple times, but only 2 times and little room for dynamic effects.
+
+- 
 ]
 
 ---
-.left-column[
-- Some SEs hard to understand.
+### References
 
-- Cluster bootstrapped smaller in most cases.
-
-- Absurdly small for ATT(4,4) that has small sample and only 4 clusters.
-]
-.right-column[
-```{r atts, echo=FALSE, message=FALSE}
-atts_i <- readRDS("atts_i.rds")
-
-atts_ig <- atts_i %>%
-  mutate(ll95 = att - 1.96 * se,
-         ul95 = att + 1.96 * se,
-         gt = paste("ATT(",group,",",time,")", sep=""),
-         method = recode(method, asm = "Asymptotic",
-          boot = "Bootstrapped", bootc = "Cluster\nbootstrapped"))
-
-pse <- ggplot(atts_ig, aes(x = att, y = method, color = method)) + 
-  geom_vline(xintercept = 0) + 
-  geom_errorbar(aes(xmin = ll95, xmax = ul95), width=0.1) +
-  geom_point() + facet_wrap(~gt) + theme_bw() +
-  theme(axis.text.y = element_blank(), axis.title.y = element_blank(),
-        axis.ticks = element_blank(), axis.text.x = element_text(size = 14),
-        strip.text.x = element_text(size = 14),
-        legend.text = element_text(size = 14),
-        legend.title = element_blank())
-
-ggsave("atts_se.png", pse,  width = 9, height = 6)
+```{r, results='asis', echo=FALSE, warning=FALSE}
+#PrintBibliography(bib, start=1, stop=5)
+print_bib_rmd(bib, start=1, stop=6)
 ```
 
-```{r attse, echo=FALSE}
-knitr::include_graphics("atts_se.png")
-```
-]
 
----
-### Other attempts to estimate ATT(4,4)
-.left-column[
 
-- Cluster-adjustment always excessively narrow.
 
-- Ignoring clustering also seems wrong.
 
-- Bayesian estimation more conservative.
-]
-.right-column[
-Method | ATT(4,4) | SE | 95% CI
---------|-------|----|-------
-Diff in proportions | 0.130 | 0.182 | -0.228, 0.489
-Diff in proportions (svy clustered) | 0.130 | 0.002 | 0.123, 0.138
- | | |
-OLS, robust SE | 0.130 | 0.184 | -0.232, 0.493
-OLS, cluster robust SE | 0.130 | 0.002 | 0.123, 0.138
- | | |
-Logit ME, robust | 0.123 | 0.150 | -0.171, 0.418
-Logit ME, cluster robust | 0.123 | 0.015 | 0.093, 0.154
- | | |
-Bayesian logit, flat priors | 0.120 | 0.130 | -0.230, 0.330
-Bayesian logit, regularizing priors | 0.060 | 0.100| -0.160, 0.230
 
-]
 
----
-.left-column[
-Bayesian priors for intercept
-]
 
-.right-column[
-```{r prior1, echo=FALSE}
-knitr::include_graphics("b44_intercept_priors.png")
-```
-]
-
----
-.left-column[
-Bayesian priors for ATT
-]
-
-.right-column[
-```{r prior2, echo=FALSE}
-knitr::include_graphics("b44_beta_priors.png")
-```
-]
