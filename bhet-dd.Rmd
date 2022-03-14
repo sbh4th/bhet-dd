@@ -35,9 +35,7 @@ library(modelsummary)
 # devtools::install_github("bcallaway11/did")
 library(did)
 library(lme4)
-library(RStata)
-options("RStata.StataVersion" = 16)
-options("RStata.StataPath"= '/Applications/Stata/StataMP.app/Contents/MacOS/stata-mp')
+library(icons)
 library(RefManageR)
 xfun::pkg_load2(c('tikzDevice', 'magick', 'pdftools'))
 source("helper.R")
@@ -247,7 +245,34 @@ $$E[Y^{1}-Y^{0}]=E[Y^{1}|T=1]-E[Y^{0}|T=0]$$
 ]
 
 ---
-### Difference-in-differences: How? The 2x2 case
+## Difference-in-Differences without Regression
+- DD is just differences in means! 
+
+.pull-left[
+Let $\mu_{it}=E(Y_{it})$
+
+- $i=0$ is control group, $i=1$ is treatment.
+
+- $t=0$ is pre-period, $t=1$ is post-period.
+
+- One 'difference' estimate of causal effect is: $\mu_{11}-\mu_{10}$ (pre-post in treated)
+
+]
+
+.pull-right[
+
+- Differences-in-Differences estimate of causal effect is: $(\mu_{11}-\mu_{10})-(\mu_{01}-\mu_{00})$
+
+Area   |     Before     |  After  | Difference |
+---------| ---------------| -------| --------------------|
+Treated  |      135     |    100    |       -35 |
+Control   |     80     |     60     |       -20 |
+T - C   |      55     |     40     |       -15  |  
+    
+]
+
+---
+### Difference-in-differences regression: How? The 2x2 case
 
 .left-column[
 - Single treated and control group, two periods
@@ -305,12 +330,12 @@ knitr::include_graphics("bhet-dd-viz.png")
 -   In the (possibly counterfactual) absence of intervention, the
     expected outcome is:
 
-    -   $E\left(Y_{i}^{0}|T=1,A=0\right)=\beta_{1}+\beta_{2}$
+    -   $E\left(Y_{i}^{0}|T=1,P=0\right)=\beta_{1}+\beta_{2}$
 
 -   In the (possibly counterfactual) presence of intervention, the
     expected outcome is:
 
-    -   $E\left(Y_{i}^{1}|T=1,A=1\right)=\beta_{1}+\beta_{2}+\beta_{3}$
+    -   $E\left(Y_{i}^{1}|T=1,P=1\right)=\beta_{1}+\beta_{2}+\beta_{3}$
 
 -   ATT is the expected difference in $Y_{i}^{1}-Y_{i}^{0}$ for those
     treated in the post-period:
@@ -1017,10 +1042,22 @@ ggdid(agg.c)
 
 ---
 ### Summary and Implications
+.left-column[
+```{r icon-twitter, echo=F}
+icon_style(fontawesome("check-square"), scale = 5, fill = "steelblue")
+```
+]
+
 .right-column[
 - BHET has multiple groups and multiple times, but only 2 times and little room for dynamic effects.
 
-- 
+- TWFE may not lead to serious bias, but still conceptually problematic.
+
+- We don't want to include villages treated in 2019 as controls for villages treated in 2020 or 2021.
+
+- Should use alternative methods. 
+
+- More to discuss re: standard errors, mediation anlaysis.
 ]
 
 ---
@@ -1028,7 +1065,7 @@ ggdid(agg.c)
 
 ```{r, results='asis', echo=FALSE, warning=FALSE}
 #PrintBibliography(bib, start=1, stop=5)
-print_bib_rmd(bib, start=1, stop=6)
+print_bib_rmd(bib, start=1, stop=7)
 ```
 
 
